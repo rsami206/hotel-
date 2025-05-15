@@ -1,0 +1,96 @@
+php artisan make:model Booking -mcr
+
+migration//
+
+
+public function up()
+{
+    Schema::create('bookings', function (Blueprint $table) {
+        $table->id();
+        $table->foreignId('user_id')->constrained()->onDelete('cascade');
+        $table->foreignId('room_id')->constrained()->onDelete('cascade');
+        $table->date('check_in');
+        $table->date('check_out');
+        $table->enum('status', ['pending', 'confirmed', 'cancelled'])->default('pending');
+        $table->timestamps();
+    });
+}
+
+
+//model
+
+
+ protected $fillable = [
+        'user_id', 'room_id', 'check_in', 'check_out', 'status',
+    ];
+
+    public function user() {
+        return $this->belongsTo(User::class);
+    }
+
+    public function room() {
+        return $this->belongsTo(Room::class);
+    }
+
+
+    //controller
+
+    public function create($roomId)
+{
+    $room = Room::findOrFail($roomId);
+    return view('bookings.create', compact('room'));
+}
+
+public function store(Request $request)
+{
+    $request->validate([
+        'check_in' => 'required|date|after_or_equal:today',
+        'check_out' => 'required|date|after:check_in',
+        'room_id' => 'required|exists:rooms,id',
+    ]);
+
+    Booking::create([
+        'user_id' => Auth::id(),
+        'room_id' => $request->room_id,
+        'check_in' => $request->check_in,
+        'check_out' => $request->check_out,
+        'status' => 'pending',
+    ]);
+
+    return redirect()->route('bookings.index')->with('success', 'Booking submitted!');
+}
+
+//route
+
+Route::middleware(['auth'])->group(function () {
+    Route::get('/bookings/create/{room}', [BookingController::class, 'create'])->name('bookings.create');
+    Route::post('/bookings', [BookingController::class, 'store'])->name('bookings.store');
+    Route::get('/bookings', [BookingController::class, 'index'])->name('bookings.index'); // Optional
+});
+
+//create booking view
+
+@extends('layouts.app')
+
+@section('content')
+<div class="container">
+    <h2>Book Room #{{ $room->room_number }}</h2>
+
+    <form action="{{ route('bookings.store') }}" method="POST">
+        @csrf
+        <input type="hidden" name="room_id" value="{{ $room->id }}">
+
+        <div class="mb-3">
+            <label>Check-in Date</label>
+            <input type="date" name="check_in" class="form-control" required>
+        </div>
+
+        <div class="mb-3">
+            <label>Check-out Date</label>
+            <input type="date" name="check_out" class="form-control" required>
+        </div>
+
+        <button type="submit" class="btn btn-success">Book Now</button>
+    </form>
+</div>
+@endsection
